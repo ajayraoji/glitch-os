@@ -667,6 +667,7 @@ fun MainChatScreen(
                     Toast.LENGTH_SHORT
                 ).show()
             } else {
+                isAutoPipelineActive = true
                 viewModel.triggerTrendingTopicGenerator(
                     category = videoAgentSettings.category,
                     language = videoAgentSettings.videoLanguage,
@@ -3432,8 +3433,9 @@ private fun ChatMessageBubble(
                     viewModel.setGeneratingAudio(true)
                     totalAudiosCount = allAudioSegments.size
                     coroutineScope.launch {
-                        val results = mutableListOf<GeneratedAudioItem>()
-                        val generatedFiles = mutableListOf<File>()
+                        try {
+                            val results = mutableListOf<GeneratedAudioItem>()
+                            val generatedFiles = mutableListOf<File>()
 
                         for (idx in allAudioSegments.indices) {
                             currentAudioIndex = idx + 1
@@ -3566,6 +3568,10 @@ private fun ChatMessageBubble(
                         // Automatically start Step 3 (NoTrack Timeframe Visuals JSON - Phase 1) as soon as Step 2 voiceover audio and length are calculated
                         if (isAutoPipelineActive) {
                             onGenerateStep3VisualsPhase1()
+                        }
+                        } finally {
+                            isGeneratingAudio = false
+                            viewModel.setGeneratingAudio(false)
                         }
                     }
                 }
