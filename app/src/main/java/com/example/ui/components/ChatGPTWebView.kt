@@ -293,9 +293,9 @@ fun ChatGPTWebView(
                             var hasJsonStart = text.includes('{');
                             var isCompleteJson = isJsonComplete(text);
                             
-                            // If prompt expected JSON: complete when closed JSON is detected
-                            if (hasJsonStart && isCompleteJson && attempts >= 4) {
-                                console.log('NoTrack JSON stream finished and verified at attempt ' + attempts);
+                            // Immediately capture closed and complete JSON response as soon as closing brace is received
+                            if (hasJsonStart && isCompleteJson) {
+                                console.log('⚡ NoTrack closed JSON detected and verified instantly at attempt ' + attempts);
                                 break;
                             }
                             
