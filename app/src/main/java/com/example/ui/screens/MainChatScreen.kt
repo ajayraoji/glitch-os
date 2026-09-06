@@ -205,6 +205,7 @@ data class Step3TimeframeVisualItem(
     val cameraMotionHint: String = "static",
     val aspectRatio: String = "9:16"
 )
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainChatScreen(
     viewModel: ChatAppiumViewModel,
@@ -328,6 +329,7 @@ fun MainChatScreen(
     var activePipelineStep by rememberSaveable { mutableIntStateOf(1) }
     var pipelineProgressPercent by rememberSaveable { mutableIntStateOf(5) }
     var isPipelineExpanded by rememberSaveable { mutableStateOf(true) }
+    var isAutoPipelineActive by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(isGeneratingTrendingTopic) {
         if (isGeneratingTrendingTopic) {
@@ -833,7 +835,9 @@ fun MainChatScreen(
                             message = msg,
                             viewModel = viewModel,
                             onNavigateToEditor = onNavigateToEditor,
-                            isLatestActiveVideoMessage = isLatestActiveVideoMessage
+                            isLatestActiveVideoMessage = isLatestActiveVideoMessage,
+                            isAutoPipelineActive = isAutoPipelineActive,
+                            onAutoPipelineActiveChange = { isAutoPipelineActive = it }
                         )
                     }
                 }
@@ -1323,7 +1327,9 @@ private fun ChatMessageBubble(
     message: ChatMessage,
     viewModel: ChatAppiumViewModel,
     onNavigateToEditor: () -> Unit,
-    isLatestActiveVideoMessage: Boolean = true
+    isLatestActiveVideoMessage: Boolean = true,
+    isAutoPipelineActive: Boolean = false,
+    onAutoPipelineActiveChange: (Boolean) -> Unit = {}
 ) {
     val isUser = message.sender == "User"
     val context = LocalContext.current
@@ -1354,6 +1360,7 @@ private fun ChatMessageBubble(
         val isTrendingJson = !isUser && (message.text.contains("\"storyboard\"") || message.text.contains("\"trend_metadata\"") || message.text.contains("\"visual_cue\"") || message.text.contains("\"audio_script\""))
         val isScenesJson = !isUser && message.text.contains("\"scenes\"") && message.text.contains("{")
         val isStep3Json = !isUser && message.text.contains("\"visual_timeline\"") && message.text.contains("{")
+        val showDetailedPipelineSections = false
 
         if (!isTrendingJson && !isScenesJson && !isStep3Json) {
             // Monospace Prompt Header
@@ -1557,6 +1564,7 @@ private fun ChatMessageBubble(
             Spacer(modifier = Modifier.height(8.dp))
 
             // --- 1. STEP 1 DROPDOWN CARD (NORMAL TEXT FORMATTED, DEFAULT CLOSED) ---
+            if (showDetailedPipelineSections) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2215,7 +2223,6 @@ private fun ChatMessageBubble(
             var exportedVideoPath by remember { mutableStateOf<String?>(null) }
             var videoErrorMessage by remember { mutableStateOf<String?>(null) }
 
-            var isAutoPipelineActive by remember { mutableStateOf(false) }
             var autoPipelineStatusText by remember { mutableStateOf("") }
             var selectedVoice by remember { mutableStateOf(EdgeNeuralTtsService.AVAILABLE_VOICES.first()) }
             var selectedEmotion by remember { mutableStateOf("⚡ Fast Viral Shorts (1.3x)") }
@@ -3415,7 +3422,7 @@ private fun ChatMessageBubble(
                             // If in Auto-Pipeline mode, proceed immediately to Step 4 Video Merge & Auto Play
                             if (isAutoPipelineActive) {
                                 composeFinalVideo(autoPlay = true)
-                                isAutoPipelineActive = false
+                                onAutoPipelineActiveChange(false)
                                 Toast.makeText(context, "🎬 4-Step Auto Pipeline Complete! 9:16 Shorts Video is now ready & playing.", Toast.LENGTH_LONG).show()
                             }
                         } finally {
@@ -3599,7 +3606,7 @@ private fun ChatMessageBubble(
             // Automatically start Step 2 (Voiceover Synthesis) as soon as Step 1 (Story Script) is complete
             LaunchedEffect(allAudioSegments) {
                 if (isLatestActiveVideoMessage && allAudioSegments.isNotEmpty() && generatedAudioList.isEmpty() && !isGeneratingAudio && !isGeneratingImages) {
-                    isAutoPipelineActive = true
+                    onAutoPipelineActiveChange(true)
                     onStartAudioSynthesis()
                 }
             }
@@ -3653,6 +3660,7 @@ private fun ChatMessageBubble(
             if (isLatestActiveVideoMessage) {
                 // --- 2. STEP 2: EDGE NEURAL STORY VOICEOVER STUDIO ---
                 val isStep2Complete = masterAudioItem != null || generatedAudioList.isNotEmpty()
+                                if (showDetailedPipelineSections) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4009,6 +4017,7 @@ private fun ChatMessageBubble(
                     }
                 }
             }
+                                }
 
             val successImgCount = generatedImagesList.count { it.isSuccess }
             val failedImgCount = generatedImagesList.count { !it.isSuccess }
@@ -4017,7 +4026,7 @@ private fun ChatMessageBubble(
             val isStep6Complete = mergedVideoScenes.isNotEmpty()
 
             // --- 3. STEP 3: TIMEFRAME VISUALS JSON & DEEPAI IMAGE GENERATOR ---
-            if (isStep2Complete) {
+            if (showDetailedPipelineSections && isStep2Complete) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                 modifier = Modifier
@@ -4743,7 +4752,7 @@ private fun ChatMessageBubble(
             }
 
             // --- 4. STEP 4: DEEPAI AI IMAGE GENERATOR (STEP 3 PROMPTS) ---
-            if (isStep3Complete) {
+            if (showDetailedPipelineSections && isStep3Complete) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                 modifier = Modifier
@@ -5063,7 +5072,7 @@ private fun ChatMessageBubble(
             }
 
             // --- 5. STEP 5: VOICEOVER WORD TIMEFRAME & CAPTIONS ALIGNMENT ---
-            if (isStep4Complete) {
+            if (showDetailedPipelineSections && isStep4Complete) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
@@ -5282,7 +5291,7 @@ private fun ChatMessageBubble(
             }
 
             // --- 6. STEP 6: ANIMATED VIDEO COMPOSER & KARAOKE PLAYER ---
-            if (isStep5Complete) {
+            if (showDetailedPipelineSections && isStep5Complete) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
@@ -5894,6 +5903,7 @@ private fun ChatMessageBubble(
                         }
                     }
                 }
+            }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
