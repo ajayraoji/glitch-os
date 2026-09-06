@@ -787,35 +787,28 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
     }
 
     suspend fun generateStep3VisualsWithNoTrackOrApi(prompt: String): String = withContext(Dispatchers.IO) {
-        val key = _apiKey.value.trim()
-        if (_webUrl.value.contains("notrack.ai")) {
-            withContext(Dispatchers.Main) {
-                _isApiCalling.value = true
-                _noTrackPromptEvent.value = prompt
-            }
-            
-            val responseDeferred = kotlinx.coroutines.CompletableDeferred<String>()
-            registerNoTrackResponseCallback { response ->
-                responseDeferred.complete(response)
-            }
-            
-            val rawReply = try {
-                kotlinx.coroutines.withTimeout(65000) {
-                    responseDeferred.await()
-                }
-            } catch (e: Exception) {
-                "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage})."
-            }
-            
-            withContext(Dispatchers.Main) {
-                _isApiCalling.value = false
-            }
-            return@withContext rawReply
-        } else if (key.isNotEmpty()) {
-            return@withContext fetchRealLiveResponse(prompt)
-        } else {
-            return@withContext ""
+        withContext(Dispatchers.Main) {
+            _isApiCalling.value = true
+            _noTrackPromptEvent.value = prompt
         }
+
+        val responseDeferred = kotlinx.coroutines.CompletableDeferred<String>()
+        registerNoTrackResponseCallback { response ->
+            responseDeferred.complete(response)
+        }
+
+        val rawReply = try {
+            kotlinx.coroutines.withTimeout(65000) {
+                responseDeferred.await()
+            }
+        } catch (e: Exception) {
+            "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage})."
+        }
+
+        withContext(Dispatchers.Main) {
+            _isApiCalling.value = false
+        }
+        return@withContext rawReply
     }
 
     fun triggerStep3VisualsGenerator(masterPrompt: String) {

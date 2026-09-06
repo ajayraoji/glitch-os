@@ -2507,7 +2507,9 @@ private fun ChatMessageBubble(
                     Voiceover Breakdown for Phase 1 (Scenes 1 to 10, Timecode 00:00 - 00:30):
                     $phase1Breakdown
                     
-                    Output strictly as JSON (no conversational preamble):
+                    STRICT OUTPUT INSTRUCTION: You MUST return ONLY valid JSON starting with { and ending with }. DO NOT add any markdown formatting, no markdown backticks, no conversational preamble, no commentary, and no markdown text outside the JSON object.
+
+                    Output strictly as JSON:
                     {
                       "story_analysis": {
                         "phase": 1,
