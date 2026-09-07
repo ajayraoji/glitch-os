@@ -330,7 +330,7 @@ fun MainChatScreen(
     
     var activePipelineStep by rememberSaveable { mutableIntStateOf(0) }
     var pipelineProgressPercent by rememberSaveable { mutableIntStateOf(0) }
-    var isPipelineExpanded by rememberSaveable { mutableStateOf(true) }
+    var isPipelineExpanded by rememberSaveable { mutableStateOf(false) }
     var isAutoPipelineActive by rememberSaveable { mutableStateOf(false) }
     var isPipelineRunning by rememberSaveable { mutableStateOf(false) }
 
@@ -6006,7 +6006,12 @@ fun AutonomousPipelineCard(
             if (isExpanded) {
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 280.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     val stepsList = listOf(
                         Triple(1, "metadata generate", "Analyzing viral trends..."),
                         Triple(2, "audio generate", "Edge Neural Voice Synthesis"),
