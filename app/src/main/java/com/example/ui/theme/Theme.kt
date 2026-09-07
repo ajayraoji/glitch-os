@@ -12,14 +12,28 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
     primary = Green80,
+    onPrimary = androidx.compose.ui.graphics.Color.Black,
     secondary = GreenGrey80,
-    tertiary = Emerald80
+    tertiary = Emerald80,
+    background = androidx.compose.ui.graphics.Color(0xFF07120B),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF00FF66),
+    surface = androidx.compose.ui.graphics.Color(0xFF0B1811),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF00FF66),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFF11251B),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFBEEFD8)
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = Green40,
+    onPrimary = androidx.compose.ui.graphics.Color.White,
     secondary = GreenGrey40,
-    tertiary = Emerald40
+    tertiary = Emerald40,
+    background = androidx.compose.ui.graphics.Color(0xFFF1FFF8),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF0F1D17),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF0F1D17),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFE7F7F0),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF2D473C)
 )
 
 @Composable

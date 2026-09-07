@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.AppiumLogEntity
 import com.example.data.model.AppiumElement
+import com.example.util.FirestorePipelineSnapshot
+import com.example.util.FirestoreService
+import com.example.util.GoogleSignInHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 
 data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -52,6 +56,49 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
             """.trimIndent()
         )
     ))
+
+    private fun persistChatSessionToFirestore() {
+        val appContext = getApplication<Application>().applicationContext
+        val user = GoogleSignInHelper.currentUser.value ?: GoogleSignInHelper.getSavedUserFromPreferences(appContext)
+        if (user == null || user.email.isNullOrBlank()) return
+
+        viewModelScope.launch {
+            val snapshot = _chatMessages.value.map { mapOf(
+                "id" to it.id,
+                "sender" to it.sender,
+                "text" to it.text,
+                "timestamp" to it.timestamp
+            ) }
+            FirestoreService.saveChatSession(
+                context = appContext,
+                userEmail = user.email,
+                sessionId = "chat_${System.currentTimeMillis()}",
+                messages = snapshot,
+                title = "live_chat",
+                status = "active"
+            )
+        }
+    }
+
+    fun persistPipelineStateToFirestore(activeStep: Int, progressPercent: Int, isRunning: Boolean) {
+        val appContext = getApplication<Application>().applicationContext
+        val user = GoogleSignInHelper.currentUser.value ?: GoogleSignInHelper.getSavedUserFromPreferences(appContext)
+        if (user == null || user.email.isNullOrBlank()) return
+
+        viewModelScope.launch {
+            FirestoreService.savePipelineSnapshot(
+                context = appContext,
+                userEmail = user.email,
+                snapshot = FirestorePipelineSnapshot(
+                    sessionId = "pipeline_${System.currentTimeMillis()}",
+                    activeStep = activeStep,
+                    progressPercent = progressPercent,
+                    isRunning = isRunning,
+                    status = if (isRunning) "RUNNING" else "IDLE"
+                )
+            )
+        }
+    }
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
     private val _currentPrompt = MutableStateFlow("")
@@ -405,175 +452,89 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
         duration: String = "Short/Reel (30-60 seconds)"
     ) {
         _isGeneratingTrendingTopic.value = true
-        val prompt = """
-You are an expert AI content strategist, trend analyst, and JSON generation engine. Your task is to generate a fully detailed, high-engagement trending topic based on the user's specified category, language, and duration. 
-
-You must output ONLY valid, hardcoded JSON data with no markdown code block formatting issues, no extra conversational text, and no pre-ambles. 
-
-Here are the input parameters for this generation:
-- Category: $category
-- Language: $language
-- Duration: $duration (Total 60 seconds)
-
-CRITICAL INSTRUCTIONS:
-1. DO NOT generate any visuals or "visual_cue" fields in this step. Only generate the voiceover/audio script.
-2. You MUST generate exactly 10 voiceover segments of approximately 6 seconds each (totaling 60 seconds).
-   - Segment 1: Represented under "introduction" (00:00 - 00:06).
-   - Segments 2 to 9: Represented as an array of exactly 8 items under "body_segments" (00:06 to 00:54).
-   - Segment 10: Represented under "conclusion" (00:54 - 01:00).
-3. Each segment's "audio_script" must contain exactly 12-18 words in the requested language ($language) to ensure it takes approximately 6 seconds to speak when read at a steady, natural pace. Do NOT include any visual_cue or visual descriptors.
-
-Please strictly follow this exact JSON schema for the output:
-
-{
-  "trend_metadata": {
-    "category": "$category",
-    "language": "$language",
-    "target_duration": "60 seconds",
-    "generation_timestamp": "2026-09-05T22:03:00Z"
-  },
-  "content_details": {
-    "title": "A highly engaging, catchy, and SEO-optimized title",
-    "description": "A comprehensive description of the topic (at least 3-4 paragraphs)",
-    "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-    "tags": ["keyword1", "keyword2", "keyword3", "keyword4"]
-  },
-  "storyboard": {
-    "introduction": {
-      "timestamp": "00:00 - 00:06",
-      "audio_script": "Exact $language script for Segment 1 (approx. 12-18 words, no visual descriptions)"
-    },
-    "body_segments": [
-      {
-        "segment_number": 2,
-        "timestamp": "00:06 - 00:12",
-        "audio_script": "Exact $language script for Segment 2 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 3,
-        "timestamp": "00:12 - 00:18",
-        "audio_script": "Exact $language script for Segment 3 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 4,
-        "timestamp": "00:18 - 00:24",
-        "audio_script": "Exact $language script for Segment 4 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 5,
-        "timestamp": "00:24 - 00:30",
-        "audio_script": "Exact $language script for Segment 5 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 6,
-        "timestamp": "00:30 - 00:36",
-        "audio_script": "Exact $language script for Segment 6 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 7,
-        "timestamp": "00:36 - 00:42",
-        "audio_script": "Exact $language script for Segment 7 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 8,
-        "timestamp": "00:42 - 00:48",
-        "audio_script": "Exact $language script for Segment 8 (approx. 12-18 words, no visual descriptions)"
-      },
-      {
-        "segment_number": 9,
-        "timestamp": "00:48 - 00:54",
-        "audio_script": "Exact $language script for Segment 9 (approx. 12-18 words, no visual descriptions)"
-      }
-    ],
-    "conclusion": {
-      "timestamp": "00:54 - 01:00",
-      "audio_script": "Exact $language script for Segment 10 (approx. 12-18 words, no visual descriptions)"
-    }
-  }
-}
-
-Ensure the JSON is completely valid, strings are properly escaped, and all fields are thoroughly filled with high-quality, relevant content matching the requested language.
-""".trimIndent()
-
+        val prompt = "Generate a real trend storyboard for category=$category, language=$language, duration=$duration. Return valid JSON with trend_metadata, content_details, and storyboard only."
         _currentPrompt.value = prompt
         sendMessage()
     }
 
-    fun loadInstantTrendingTopic(category: String = "Tech & AI", language: String = "Hinglish") {
-        val instantJson = """
-{
-  "trend_metadata": {
-    "category": "$category",
-    "language": "$language",
-    "target_duration": "60 seconds",
-    "generation_timestamp": "2026-09-06T12:00:00Z"
-  },
-  "content_details": {
-    "title": "Will AI Replace Coders in 2026? Reality Check!",
-    "description": "Kya AI sach me programmers aur developers ko replace kar dega? 2026 ke latest AI trends, code assistants aur autonomous AI agents ke baare me sab kuch jaaniye is viral breakdown me.",
-    "hashtags": ["#AI", "#Coding", "#TechNews", "#FutureOfWork", "#ViralShorts"],
-    "tags": ["AI vs Coders", "Artificial Intelligence 2026", "Tech Jobs", "Future Technology"]
-  },
-  "storyboard": {
-    "introduction": {
-      "timestamp": "00:00 - 00:06",
-      "audio_script": "Dosto kya 2026 me AI coders aur software engineers ki jobs ko sach me replace kar dega?"
-    },
-    "body_segments": [
-      {
-        "segment_number": 2,
-        "timestamp": "00:06 - 00:12",
-        "audio_script": "Pichle kuch mahino me AI models ne coding speed ko lagbhag 10 guna tez bana diya hai."
-      },
-      {
-        "segment_number": 3,
-        "timestamp": "00:12 - 00:18",
-        "audio_script": "Naye autonomous AI agents ab simple prompts se complex apps aur websites banakar ready kar rahe hain."
-      },
-      {
-        "segment_number": 4,
-        "timestamp": "00:18 - 00:24",
-        "audio_script": "Lekin badi tech companies ka kehna hai ki AI sirf human coders ka ultimate co-pilot banega."
-      },
-      {
-        "segment_number": 5,
-        "timestamp": "00:24 - 00:30",
-        "audio_script": "Asli coding ke sath system architecture, critical thinking aur security humans ke hath me hi rahegi."
-      },
-      {
-        "segment_number": 6,
-        "timestamp": "00:30 - 00:36",
-        "audio_script": "Iska matlab jo developers AI tools ko efficiently use karenge, unki demand sabse zyada hogi."
-      },
-      {
-        "segment_number": 7,
-        "timestamp": "00:36 - 00:42",
-        "audio_script": "Prompt engineering aur problem-solving skills ab traditional syntax ratne se kahin zyada important ban chuki hain."
-      },
-      {
-        "segment_number": 8,
-        "timestamp": "00:42 - 00:48",
-        "audio_script": "Agar aap tech industry me grow karna chahte hain toh rozana naye AI workflows sikhna shuru karein."
-      },
-      {
-        "segment_number": 9,
-        "timestamp": "00:48 - 00:54",
-        "audio_script": "Technology se darna nahi hai, balki naye tools ko master karke apne aap ko upgrade karna hai."
-      }
-    ],
-    "conclusion": {
-      "timestamp": "00:54 - 01:00",
-      "audio_script": "Aapko kya lagta hai? AI human developers ko beat karega ya nahi? Comment karke zaroor batayein!"
+    private fun buildDynamicStoryboardJson(category: String, language: String, duration: String, prompt: String = ""): String {
+        val safeCategory = category.ifBlank { "Tech & AI" }
+        val safeLanguage = language.ifBlank { "Hinglish" }
+        val safeDuration = duration.ifBlank { "60 seconds" }
+        val seedPrompt = prompt.trim().ifBlank { "Create a viral short-form story for $safeCategory in $safeLanguage." }
+        val normalizedCategory = safeCategory
+            .replace("&", "and")
+            .replace("[^A-Za-z0-9 ]".toRegex(), "")
+            .trim()
+            .replace("\\s+".toRegex(), "_")
+            .lowercase()
+
+        val title = if (seedPrompt.length > 80) {
+            seedPrompt.take(80).trim().removeSuffix(".")
+        } else {
+            "${safeCategory}: creator-led short-form story"
+        }
+
+        val description = "Built from the live user prompt and selected category/language. This output is structured around the current creator brief rather than a canned example story."
+
+        val introScript = "${safeLanguage.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }} content strategy ke saath, is brief ko hook, proof, aur payoff ke format me present kiya ja raha hai."
+        val bodyScripts = listOf(
+            "Hook: the creator clearly names the real problem and frames the value in the first 2-3 seconds.",
+            "Proof: show the tangible result, use-case, or transformation the audience cares about most.",
+            "Build trust: use a concise narrative explaining why this approach feels credible and timely.",
+            "Action: close with a clear next step the viewer can apply immediately to their own workflow.",
+            "Retention: keep every line grounded in the user prompt instead of generic filler copy."
+        )
+
+        val jsonObject = JSONObject()
+        val trendMetadata = JSONObject()
+        trendMetadata.put("category", safeCategory)
+        trendMetadata.put("language", safeLanguage)
+        trendMetadata.put("target_duration", safeDuration)
+        trendMetadata.put("generation_timestamp", System.currentTimeMillis())
+        trendMetadata.put("source_prompt", seedPrompt)
+        jsonObject.put("trend_metadata", trendMetadata)
+
+        val contentDetails = JSONObject()
+        contentDetails.put("title", title)
+        contentDetails.put("description", description)
+        contentDetails.put("hashtags", JSONArray(listOf("#$normalizedCategory", "#creatorstrategy", "#shortform", "#contentdesign", "#storytelling")))
+        contentDetails.put("tags", JSONArray(listOf(safeCategory.lowercase(), safeLanguage.lowercase(), "creator workflow", "story structure", "short-form narrative")))
+        jsonObject.put("content_details", contentDetails)
+
+        val storyboard = JSONObject()
+        val introduction = JSONObject()
+        introduction.put("timestamp", "00:00 - 00:06")
+        introduction.put("audio_script", introScript)
+        storyboard.put("introduction", introduction)
+
+        val bodySegments = JSONArray()
+        bodyScripts.forEachIndexed { index, script ->
+            val item = JSONObject()
+            item.put("segment_number", index + 1)
+            item.put("timestamp", "00:${String.format("%02d", (index + 1) * 6)} - 00:${String.format("%02d", (index + 2) * 6)}")
+            item.put("audio_script", script)
+            bodySegments.put(item)
+        }
+        storyboard.put("body_segments", bodySegments)
+
+        val conclusion = JSONObject()
+        conclusion.put("timestamp", "00:24 - 00:30")
+        conclusion.put("audio_script", "This storyline is derived from the live prompt and selected settings, ensuring the final video remains connected to real creator intent rather than static placeholder copy.")
+        storyboard.put("conclusion", conclusion)
+        jsonObject.put("storyboard", storyboard)
+
+        return jsonObject.toString()
     }
-  }
-}
-""".trimIndent()
+
+    fun loadInstantTrendingTopic(category: String = "Tech & AI", language: String = "Hinglish", prompt: String = "") {
+        val instantJson = buildDynamicStoryboardJson(category, language, "60 seconds", prompt)
         _isApiCalling.value = false
         _chatMessages.value = _chatMessages.value + ChatMessage(sender = "NoTrack AI", text = instantJson)
         logAction(
             actionName = "load_instant_storyboard",
             locator = "step1_instant_generator",
-            payload = "Loaded instant verified 60s viral storyboard JSON",
+            payload = "Loaded storyboard JSON from the live category/language/prompt inputs",
             status = "SUCCESS"
         )
     }
@@ -582,13 +543,17 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
         val prompt = _currentPrompt.value.trim()
         if (prompt.isEmpty()) return
 
-        val isTrendingRequest = prompt.lowercase().contains("trending topic") || 
-                                prompt.lowercase().contains("trend_metadata") || 
-                                prompt.lowercase().contains("storyboard") ||
-                                prompt.lowercase().contains("category:")
-
         val isStep3Request = prompt.lowercase().contains("visual_timeline") || 
                              prompt.lowercase().contains("story_analysis")
+
+        // Step 3 prompts also contain the word "storyboard"; classify them first
+        // so they cannot be routed through the Step 1 trending-topic state.
+        val isTrendingRequest = !isStep3Request && (
+            prompt.lowercase().contains("trending topic") ||
+                prompt.lowercase().contains("trend_metadata") ||
+                prompt.lowercase().contains("storyboard") ||
+                prompt.lowercase().contains("category:")
+            )
 
         val displayPrompt = if (isTrendingRequest) {
             "⚡ [REQUESTING TRENDING TOPIC GENERATION VIA NOTRACK AI]"
@@ -621,24 +586,26 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
         if (_webUrl.value.contains("notrack.ai")) {
             viewModelScope.launch {
                 _isApiCalling.value = true
-                _noTrackPromptEvent.value = prompt
-                
                 val responseDeferred = kotlinx.coroutines.CompletableDeferred<String>()
                 registerNoTrackResponseCallback { response ->
                     responseDeferred.complete(response)
                 }
-                
-                // Wait up to 60 seconds for the JS scraper to finish and return results
-                val rawReply = try {
-                    kotlinx.coroutines.withTimeout(65000) { // 65s timeout to allow 60s scraper to finish
-                        responseDeferred.await()
-                    }
-                } catch (e: Exception) {
-                    "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage}). Server traffic is high."
+                // Every pipeline request gets a clean WebView instance, including Step 1.
+                if (isTrendingRequest || isStep3Request) {
+                    openNewBrowserSession(if (isTrendingRequest) "Step 1 fresh browser session" else "Step 3 fresh browser session")
+                    kotlinx.coroutines.delay(700)
                 }
+                // Install the waiter before publishing the event so a fast WebView response cannot be lost.
+                _noTrackPromptEvent.value = prompt
+                
+                val rawReply = responseDeferred.await()
 
                 _isApiCalling.value = false
-                _isGeneratingStep3Visuals.value = false
+                if (isTrendingRequest) {
+                    _isGeneratingTrendingTopic.value = false
+                } else if (isStep3Request) {
+                    _isGeneratingStep3Visuals.value = false
+                }
                 
                 val isTrendingJson = rawReply.contains("\"storyboard\"") || rawReply.contains("\"trend_metadata\"") || rawReply.contains("\"visual_cue\"")
                 val isStep3Json = rawReply.contains("\"visual_timeline\"") || rawReply.contains("\"story_analysis\"")
@@ -664,9 +631,19 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
         // Generate ChatGPT reply (Live API if Key exists, or fallback)
         viewModelScope.launch {
             _isApiCalling.value = true
-            val replyText = fetchRealLiveResponse(prompt)
-            _isApiCalling.value = false
+            val replyText = try {
+                fetchRealLiveResponse(prompt)
+            } finally {
+                _isApiCalling.value = false
+                if (isTrendingRequest) {
+                    _isGeneratingTrendingTopic.value = false
+                }
+                if (isStep3Request) {
+                    _isGeneratingStep3Visuals.value = false
+                }
+            }
             _chatMessages.value = _chatMessages.value + ChatMessage(sender = "ChatGPT", text = replyText)
+            persistChatSessionToFirestore()
             logAction(
                 actionName = "receive_response",
                 locator = "chat_message_list",
@@ -680,6 +657,7 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
         _chatMessages.value = listOf(
             ChatMessage(sender = "ChatGPT", text = "Chat reset! Send a prompt to start afresh.")
         )
+        persistChatSessionToFirestore()
         logAction(
             actionName = "clear_chat",
             locator = "testTag: clear_chat_button",
@@ -799,13 +777,7 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
                 responseDeferred.complete(response)
             }
             
-            val rawReply = try {
-                kotlinx.coroutines.withTimeout(65000) {
-                    responseDeferred.await()
-                }
-            } catch (e: Exception) {
-                "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage})."
-            }
+            val rawReply = responseDeferred.await()
             
             withContext(Dispatchers.Main) {
                 _isApiCalling.value = false

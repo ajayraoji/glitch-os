@@ -25,8 +25,73 @@ data class VideoAgentSettings(
     val lastUpdatedTimestamp: Long = System.currentTimeMillis()
 )
 
+data class FirestorePipelineSnapshot(
+    val sessionId: String,
+    val activeStep: Int,
+    val progressPercent: Int,
+    val isRunning: Boolean,
+    val status: String
+)
+
 object FirestoreService {
     private const val TAG = "FirestoreService"
+
+    suspend fun saveChatSession(
+        context: Context,
+        userEmail: String,
+        sessionId: String,
+        messages: List<Map<String, Any>>,
+        title: String,
+        status: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val firestore = getFirestoreSafe(context) ?: return@withContext
+            val uid = getFirebaseAuthSafe(context)?.currentUser?.uid
+                ?: userEmail.replace(".", "_").replace("@", "_at_")
+            val data = hashMapOf<String, Any>(
+                "sessionId" to sessionId,
+                "userEmail" to userEmail,
+                "title" to title,
+                "status" to status,
+                "messages" to messages,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection("users").document(uid)
+                .collection("chat_sessions").document(sessionId)
+                .set(data, SetOptions.merge()).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to save chat session", e)
+        }
+    }
+
+    suspend fun savePipelineSnapshot(
+        context: Context,
+        userEmail: String,
+        snapshot: FirestorePipelineSnapshot
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val firestore = getFirestoreSafe(context) ?: return@withContext
+            val uid = getFirebaseAuthSafe(context)?.currentUser?.uid
+                ?: userEmail.replace(".", "_").replace("@", "_at_")
+            val data = hashMapOf<String, Any>(
+                "sessionId" to snapshot.sessionId,
+                "activeStep" to snapshot.activeStep,
+                "progressPercent" to snapshot.progressPercent,
+                "isRunning" to snapshot.isRunning,
+                "status" to snapshot.status,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection("users").document(uid)
+                .collection("pipeline_snapshots").document(snapshot.sessionId)
+                .set(data, SetOptions.merge()).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to save pipeline snapshot", e)
+        }
+    }
 
     /**
      * Saves Video Agent Settings to Firestore
