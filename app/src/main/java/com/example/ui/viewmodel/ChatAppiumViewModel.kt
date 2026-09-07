@@ -590,17 +590,15 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
                 registerNoTrackResponseCallback { response ->
                     responseDeferred.complete(response)
                 }
+                // Every pipeline request gets a clean WebView instance, including Step 1.
+                if (isTrendingRequest || isStep3Request) {
+                    openNewBrowserSession(if (isTrendingRequest) "Step 1 fresh browser session" else "Step 3 fresh browser session")
+                    kotlinx.coroutines.delay(700)
+                }
                 // Install the waiter before publishing the event so a fast WebView response cannot be lost.
                 _noTrackPromptEvent.value = prompt
                 
-                // Wait up to 60 seconds for the JS scraper to finish and return results
-                val rawReply = try {
-                    kotlinx.coroutines.withTimeout(65000) { // 65s timeout to allow 60s scraper to finish
-                        responseDeferred.await()
-                    }
-                } catch (e: Exception) {
-                    "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage}). Server traffic is high."
-                }
+                val rawReply = responseDeferred.await()
 
                 _isApiCalling.value = false
                 if (isTrendingRequest) {
@@ -779,13 +777,7 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
                 responseDeferred.complete(response)
             }
             
-            val rawReply = try {
-                kotlinx.coroutines.withTimeout(65000) {
-                    responseDeferred.await()
-                }
-            } catch (e: Exception) {
-                "❌ [NOTRACK_TIMEOUT] Scraper timed out waiting for response from https://notrack.ai (${e.localizedMessage})."
-            }
+            val rawReply = responseDeferred.await()
             
             withContext(Dispatchers.Main) {
                 _isApiCalling.value = false

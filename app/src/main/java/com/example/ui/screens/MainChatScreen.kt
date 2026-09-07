@@ -2390,9 +2390,7 @@ private fun ChatMessageBubble(
                         indeterminate = true
                     )
 
-                    viewModel.openNewBrowserSession("Step 3 complete storyboard in a new browser tab")
                     coroutineScope.launch {
-                        kotlinx.coroutines.delay(700)
                         viewModel.triggerStep3VisualsGenerator(masterPromptStr)
                     }
                 }
@@ -4089,37 +4087,6 @@ private fun ChatMessageBubble(
                                     Text("⚡ GENERATE $calculatedSceneCount-SCENE MASTER STORYBOARD (3s INTERVAL)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { onGenerateStep3VisualsPhase1() },
-                                        enabled = !isGeneratingStep3Visuals,
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF00E5FF),
-                                            contentColor = Color.Black
-                                        ),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(if (isGeneratingStep3Visuals) "PHASE 1 (GEN...)" else "⚡ PHASE 1 (SCENES 1-10)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                                    }
-
-                                    Button(
-                                        onClick = { onGenerateStep3VisualsPhase2() },
-                                        enabled = !isGeneratingStep3Visuals,
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF00E5FF),
-                                            contentColor = Color.Black
-                                        ),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(if (isGeneratingStep3Visuals) "PHASE 2 (GEN...)" else "⚡ PHASE 2 (SCENES 11-20)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                                    }
-                                }
-
                             }
                         } else if (step3VisualsList.isNotEmpty()) {
                             // JSON Action Buttons
@@ -4148,44 +4115,17 @@ private fun ChatMessageBubble(
 
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                OutlinedButton(
+                                    onClick = { onGenerateStep3VisualsMaster() },
+                                    enabled = !isGeneratingStep3Visuals,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00FF66)),
+                                    border = BorderStroke(1.dp, Color(0xFF00FF66).copy(alpha = 0.6f)),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    OutlinedButton(
-                                        onClick = { onGenerateStep3VisualsMaster() },
-                                        enabled = !isGeneratingStep3Visuals,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00FF66)),
-                                        border = BorderStroke(1.dp, Color(0xFF00FF66).copy(alpha = 0.6f)),
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text("RE-GEN MASTER", fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = { onGenerateStep3VisualsPhase1() },
-                                        enabled = !isGeneratingStep3Visuals,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF)),
-                                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f)),
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("P1 (1-10)", fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = { onGenerateStep3VisualsPhase2() },
-                                        enabled = !isGeneratingStep3Visuals,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF00E5FF)),
-                                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f)),
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("P2 (11-20)", fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-                                    }
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("RE-GENERATE COMPLETE JSON", fontFamily = FontFamily.Monospace, fontSize = 8.sp)
                                 }
                             }
                         }

@@ -140,10 +140,8 @@ fun ChatGPTWebView(
                 isLoading = true
                 currentLoadedUrl = targetChatUrl
                 webViewInstance?.loadUrl(targetChatUrl)
-                kotlinx.coroutines.withTimeoutOrNull(12000L) {
-                    while (isLoading) {
-                        kotlinx.coroutines.delay(200)
-                    }
+                while (isLoading) {
+                    kotlinx.coroutines.delay(200)
                 }
                 kotlinx.coroutines.delay(1500) // Let the page fully settle
             }
@@ -237,12 +235,11 @@ fun ChatGPTWebView(
                         }
                         
                         // 4. Active polling loop: monitor generation status with verified assistant bubble selectors
-                        var maxPollAttempts = 120; // Up to 60 seconds (120 * 500ms)
                         var attempts = 0;
                         var text = '';
                         var generationStarted = false;
                         
-                        while (attempts < maxPollAttempts) {
+                        while (true) {
                             await new Promise(resolve => setTimeout(resolve, 500));
                             attempts++;
                             
@@ -302,7 +299,7 @@ fun ChatGPTWebView(
                             
                             // For regular chat or completed stream: finish when generation stopped and text is available
                             if (generationStarted && !isGenerating && text.length > 0) {
-                                if ((!hasJsonStart && !text.toLowerCase().includes('thinking')) || isCompleteJson || attempts >= 110) {
+                                if ((!hasJsonStart && !text.toLowerCase().includes('thinking')) || isCompleteJson) {
                                     console.log('NoTrack generation finished cleanly after ' + (attempts * 0.5) + ' seconds.');
                                     break;
                                 }
