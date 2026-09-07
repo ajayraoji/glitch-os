@@ -183,6 +183,7 @@ import com.example.util.GoogleSignInHelper
 import com.example.util.GoogleUser
 import com.example.service.PipelineForegroundService
 import com.example.util.AppCacheManager
+import com.example.util.VerticalVideoExporter
 import android.Manifest
 import android.os.Build
 import android.content.pm.PackageManager
@@ -330,108 +331,37 @@ fun MainChatScreen(
     var pipelineProgressPercent by rememberSaveable { mutableIntStateOf(5) }
     var isPipelineExpanded by rememberSaveable { mutableStateOf(true) }
     var isAutoPipelineActive by rememberSaveable { mutableStateOf(false) }
+    var isPipelineRunning by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(isGeneratingTrendingTopic) {
-        if (isGeneratingTrendingTopic) {
-            // Step 1: metadata generate (1% -> 14%)
-            activePipelineStep = 1
-            for (p in 1..14) {
-                pipelineProgressPercent = p
-                kotlinx.coroutines.delay(100)
-            }
-            // Real-time synchronization: Wait for the background NoTrack scraper to finish its API call
-            while (isApiCalling) {
-                kotlinx.coroutines.delay(500)
-            }
-            
-            // Step 2: audio generate (15% -> 28%)
-            activePipelineStep = 2
-            // Wait up to 3 seconds for the real voiceover synthesis to be triggered and started
-            var startWaitCount = 0
-            while (!isGeneratingAudioLive && startWaitCount < 15) {
-                kotlinx.coroutines.delay(200)
-                startWaitCount++
-            }
-            // Now, wait dynamically as long as the real voiceover synthesis is active
-            var audioProgress = 15
-            while (isGeneratingAudioLive) {
-                pipelineProgressPercent = audioProgress
-                if (audioProgress < 27) {
-                    audioProgress++
-                }
-                kotlinx.coroutines.delay(600)
-            }
-            pipelineProgressPercent = 28
-            
-            // Step 3: visuals generate (29% -> 42%)
-            activePipelineStep = 3
-            // Wait up to 3 seconds for the real storyboard generator to start
-            var step3WaitCount = 0
-            while (!isGeneratingStep3VisualsLive && step3WaitCount < 15) {
-                kotlinx.coroutines.delay(200)
-                step3WaitCount++
-            }
-            // Now, wait dynamically as long as the storyboard generator is active
-            var step3Progress = 29
-            while (isGeneratingStep3VisualsLive) {
-                pipelineProgressPercent = step3Progress
-                if (step3Progress < 41) {
-                    step3Progress++
-                }
-                kotlinx.coroutines.delay(600)
-            }
-            pipelineProgressPercent = 42
-            
-            // Step 4: images generate (43% -> 57%)
-            activePipelineStep = 4
-            // Wait up to 3 seconds for image generation to start
-            var step4WaitCount = 0
-            while (!isGeneratingImagesLive && step4WaitCount < 15) {
-                kotlinx.coroutines.delay(200)
-                step4WaitCount++
-            }
-            // Now, wait dynamically as long as image generation is active
-            var step4Progress = 43
-            while (isGeneratingImagesLive) {
-                pipelineProgressPercent = step4Progress
-                if (step4Progress < 56) {
-                    step4Progress++
-                }
-                kotlinx.coroutines.delay(600)
-            }
-            pipelineProgressPercent = 57
-            
-            // Step 5: captions (58% -> 71%)
-            activePipelineStep = 5
-            for (p in 58..71) {
-                pipelineProgressPercent = p
-                kotlinx.coroutines.delay(80)
-            }
-            
-            // Step 6: video generate (72% -> 85%)
-            activePipelineStep = 6
-            for (p in 72..85) {
-                pipelineProgressPercent = p
-                kotlinx.coroutines.delay(120)
-            }
-            
-            // Step 7: uploading youtube (86% -> 100%)
-            activePipelineStep = 7
-            for (p in 86..100) {
-                pipelineProgressPercent = p
-                kotlinx.coroutines.delay(80)
-            }
-
-            // Auto-trigger YouTube upload dialog upon reaching Step 7
-            val fileToUpload = File(context.cacheDir, "youtube_short_${System.currentTimeMillis()}.mp4")
-            showYouTubeUploadDialog = fileToUpload
-            
-            // Mark generation complete in viewModel to hide the pipeline card
-            viewModel.setGeneratingTrendingTopic(false)
-        } else {
-            // Reset to default on cancelled or not running
+    LaunchedEffect(
+        isPipelineRunning,
+        isApiCalling,
+        isGeneratingAudioLive,
+        isGeneratingStep3VisualsLive,
+        isGeneratingImagesLive
+    ) {
+        if (!isPipelineRunning) {
             activePipelineStep = 1
             pipelineProgressPercent = 0
+        } else {
+            when {
+                isGeneratingImagesLive -> {
+                    activePipelineStep = 4
+                    pipelineProgressPercent = 55
+                }
+                isGeneratingStep3VisualsLive -> {
+                    activePipelineStep = 3
+                    pipelineProgressPercent = 40
+                }
+                isGeneratingAudioLive -> {
+                    activePipelineStep = 2
+                    pipelineProgressPercent = 25
+                }
+                isApiCalling -> {
+                    activePipelineStep = 1
+                    pipelineProgressPercent = 10
+                }
+            }
         }
     }
 
@@ -643,7 +573,9 @@ fun MainChatScreen(
     ) { innerPadding ->
         val keyboardController = LocalSoftwareKeyboardController.current
         val focusManager = LocalFocusManager.current
-        val isBusyGenerating = isGeneratingTrendingTopic || isApiCalling || isAutomating
+        val isBusyGenerating = isGeneratingTrendingTopic || isApiCalling || isAutomating ||
+            isGeneratingAudioLive || isGeneratingStep3VisualsLive || isGeneratingImagesLive ||
+            isAutoPipelineActive || isPipelineRunning
 
         val handleUserSubmit = {
             if (isBusyGenerating) {
@@ -669,6 +601,7 @@ fun MainChatScreen(
                     Toast.LENGTH_SHORT
                 ).show()
             } else {
+                isPipelineRunning = true
                 isAutoPipelineActive = true
                 viewModel.triggerTrendingTopicGenerator(
                     category = videoAgentSettings.category,
@@ -718,7 +651,7 @@ fun MainChatScreen(
             }
 
             // AI VIDEO ENGINE BUSY NOTICE BANNER
-            if (isGeneratingTrendingTopic || showYouTubeUploadDialog != null || isAutomating) {
+            if (isPipelineRunning || showYouTubeUploadDialog != null || isAutomating) {
                 Surface(
                     color = Color(0xFF021208),
                     border = BorderStroke(1.dp, Color(0xFF00FF66).copy(alpha = 0.35f)),
@@ -758,11 +691,12 @@ fun MainChatScreen(
 
             // 7-STEP AUTONOMOUS AI PIPELINE CARD (ALWAYS VISIBLE & FULLY INTERACTIVE)
             AutonomousPipelineCard(
-                activeStep = if (isGeneratingTrendingTopic) activePipelineStep else 0,
-                progressPercent = if (isGeneratingTrendingTopic) pipelineProgressPercent else 0,
+                activeStep = if (isPipelineRunning) activePipelineStep else 0,
+                progressPercent = if (isPipelineRunning) pipelineProgressPercent else 0,
                 isExpanded = isPipelineExpanded,
                 onToggleExpand = { isPipelineExpanded = !isPipelineExpanded },
                 onCancelClick = {
+                    isPipelineRunning = false
                     viewModel.setGeneratingTrendingTopic(false)
                     viewModel.setGeneratingAudio(false)
                     viewModel.setGeneratingImages(false)
@@ -772,13 +706,12 @@ fun MainChatScreen(
                 onStepClick = { stepNum ->
                     viewModel.selectPipelineStepView(stepNum)
                     if (stepNum == 7) {
-                        val targetFile = File(context.cacheDir, "youtube_short_${System.currentTimeMillis()}.mp4")
-                        showYouTubeUploadDialog = targetFile
+                        Toast.makeText(context, "Step 7 waits for a real exported MP4 file.", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "⚡ Showing Step #$stepNum in active Faceless Video Card!", Toast.LENGTH_SHORT).show()
                     }
                 },
-                isGenerating = isGeneratingTrendingTopic,
+                isGenerating = isPipelineRunning,
                 onStartClick = { handleTriggerVideo() }
             )
 
@@ -837,7 +770,21 @@ fun MainChatScreen(
                             onNavigateToEditor = onNavigateToEditor,
                             isLatestActiveVideoMessage = isLatestActiveVideoMessage,
                             isAutoPipelineActive = isAutoPipelineActive,
-                            onAutoPipelineActiveChange = { isAutoPipelineActive = it }
+                            onAutoPipelineActiveChange = { isAutoPipelineActive = it },
+                            onPipelineStepChange = { step ->
+                                activePipelineStep = step
+                                pipelineProgressPercent = when (step) {
+                                    1 -> 10
+                                    2 -> 25
+                                    3 -> 40
+                                    4 -> 55
+                                    5 -> 70
+                                    6 -> 85
+                                    7 -> 95
+                                    else -> pipelineProgressPercent
+                                }
+                            },
+                            onPipelineFinished = { isPipelineRunning = false }
                         )
                     }
                 }
@@ -1329,7 +1276,9 @@ private fun ChatMessageBubble(
     onNavigateToEditor: () -> Unit,
     isLatestActiveVideoMessage: Boolean = true,
     isAutoPipelineActive: Boolean = false,
-    onAutoPipelineActiveChange: (Boolean) -> Unit = {}
+    onAutoPipelineActiveChange: (Boolean) -> Unit = {},
+    onPipelineStepChange: (Int) -> Unit = {},
+    onPipelineFinished: () -> Unit = {}
 ) {
     val isUser = message.sender == "User"
     val context = LocalContext.current
@@ -1360,7 +1309,7 @@ private fun ChatMessageBubble(
         val isTrendingJson = !isUser && (message.text.contains("\"storyboard\"") || message.text.contains("\"trend_metadata\"") || message.text.contains("\"visual_cue\"") || message.text.contains("\"audio_script\""))
         val isScenesJson = !isUser && message.text.contains("\"scenes\"") && message.text.contains("{")
         val isStep3Json = !isUser && message.text.contains("\"visual_timeline\"") && message.text.contains("{")
-        val showDetailedPipelineSections = false
+        val showDetailedPipelineSections = true
 
         if (!isTrendingJson && !isScenesJson && !isStep3Json) {
             // Monospace Prompt Header
@@ -2414,6 +2363,7 @@ private fun ChatMessageBubble(
             // Master Prompt Dynamic-Scene Continuous Storyboard Generator
             val onGenerateStep3VisualsMaster: () -> Unit = {
                 if (!isGeneratingStep3Visuals) {
+                    onPipelineStepChange(3)
                     val allAudio = mutableListOf<String>()
                     if (introAudioScript.isNotBlank()) allAudio.add(introAudioScript)
                     bodySegments.forEach { if (it.audioScript.isNotBlank()) allAudio.add(it.audioScript) }
@@ -2478,6 +2428,7 @@ private fun ChatMessageBubble(
             // Async function to generate Step 3 Visual Prompts: Phase 1 (Voiceovers 1-5 -> Scenes 1-10)
             val onGenerateStep3VisualsPhase1: () -> Unit = {
                 if (!isGeneratingStep3Visuals) {
+                    onPipelineStepChange(3)
                     val all10Voiceovers = mutableListOf<String>()
                     if (introAudioScript.isNotBlank()) all10Voiceovers.add(introAudioScript)
                     bodySegments.forEach { if (it.audioScript.isNotBlank()) all10Voiceovers.add(it.audioScript) }
@@ -2755,6 +2706,12 @@ private fun ChatMessageBubble(
                 }
             }
 
+            LaunchedEffect(calculatedWordCaptions) {
+                if (calculatedWordCaptions.isNotEmpty()) {
+                    onPipelineStepChange(5)
+                }
+            }
+
             fun playVideoScene(index: Int) {
                 if (mergedVideoScenes.isEmpty()) {
                     videoErrorMessage = "⚠️ Video scene list is empty. Please generate images and audio first."
@@ -2934,6 +2891,7 @@ private fun ChatMessageBubble(
             }
 
             fun composeFinalVideo(autoPlay: Boolean = true) {
+                onPipelineStepChange(6)
                 isComposingVideo = true
                 val count = maxOf(allVisualPrompts.size, allAudioSegments.size, step3VisualsList.size)
                 val scenes = mutableListOf<MergedVideoScene>()
@@ -2962,6 +2920,9 @@ private fun ChatMessageBubble(
                 }
 
                 mergedVideoScenes = scenes
+                if (scenes.isNotEmpty()) {
+                    onPipelineStepChange(6)
+                }
                 isComposingVideo = false
                 isVideoExported = false
                 AppCacheManager.checkAndAutoClearCache(context, 100L)
@@ -3000,8 +2961,12 @@ private fun ChatMessageBubble(
             }
 
             // Autonomous YouTube Login & Token Verification when final video is complete
-            LaunchedEffect(mergedVideoScenes) {
-                if (mergedVideoScenes.isNotEmpty()) {
+            LaunchedEffect(mergedVideoScenes, exportedVideoPath) {
+                if (mergedVideoScenes.isNotEmpty() && exportedVideoPath != null) {
+                    val fileToUpload = exportedVideoPath
+                        ?.let(::File)
+                        ?.takeIf { it.isFile && it.extension.equals("mp4", ignoreCase = true) }
+                        ?: return@LaunchedEffect
                     val currentUser = GoogleSignInHelper.currentUser.value ?: GoogleSignInHelper.getSavedUserFromPreferences(context)
                     if (currentUser == null || !currentUser.hasYouTubePermission) {
                         Toast.makeText(
@@ -3009,8 +2974,6 @@ private fun ChatMessageBubble(
                             "🔐 [AUTONOMOUS YOUTUBE CHECK] Final Video Ready! Checking YouTube token...\nNo saved token found. Autonomous login opening...",
                             Toast.LENGTH_LONG
                         ).show()
-                        val targetPath = exportedVideoPath ?: mergedVideoScenes.firstOrNull()?.imagePathOrUrl ?: ""
-                        val fileToUpload = if (targetPath.startsWith("/")) File(targetPath) else File(context.cacheDir, "youtube_short_${System.currentTimeMillis()}.mp4")
                         showYouTubeUploadDialog = fileToUpload
 
                         val client = GoogleSignInHelper.getGoogleSignInClient(context)
@@ -3021,8 +2984,6 @@ private fun ChatMessageBubble(
                             "✅ [AUTONOMOUS YOUTUBE VERIFIED] Saved Channel: ${currentUser.email}\nYouTube Shorts token ready & saved in database!",
                             Toast.LENGTH_LONG
                         ).show()
-                        val targetPath = exportedVideoPath ?: mergedVideoScenes.firstOrNull()?.imagePathOrUrl ?: ""
-                        val fileToUpload = if (targetPath.startsWith("/")) File(targetPath) else File(context.cacheDir, "youtube_short_${System.currentTimeMillis()}.mp4")
                         showYouTubeUploadDialog = fileToUpload
                     }
                 }
@@ -3124,49 +3085,40 @@ private fun ChatMessageBubble(
                     return
                 }
 
-                try {
+                onPipelineStepChange(7)
+                coroutineScope.launch {
                     val exportDir = File(context.filesDir, "viral_shorts_export")
-                    if (!exportDir.exists()) exportDir.mkdirs()
-
                     val exportId = "SHORT_${System.currentTimeMillis().toString().takeLast(6)}"
-                    val manifestFile = File(exportDir, "manifest_${exportId}.json")
-
-                    val json = JSONObject()
-                    json.put("projectId", exportId)
-                    json.put("format", "9:16 Vertical Shorts / Reels")
-                    json.put("resolution", "1080x1920")
-                    json.put("fps", 30)
-                    json.put("totalScenes", mergedVideoScenes.size)
-                    json.put("voiceModel", selectedVoice.name)
-                    json.put("emotionSpeed", selectedEmotion)
-
-                    val scenesArray = org.json.JSONArray()
-                    for (sc in mergedVideoScenes) {
-                        val sObj = JSONObject()
-                        sObj.put("sceneIndex", sc.sceneIndex)
-                        sObj.put("title", sc.title)
-                        sObj.put("imageFile", sc.imagePathOrUrl)
-                        sObj.put("audioFile", sc.audioPath)
-                        sObj.put("subtitles", sc.caption)
-                        scenesArray.put(sObj)
+                    val outputFile = File(exportDir, "${exportId}.mp4")
+                    val inputs = mergedVideoScenes.map { scene ->
+                        VerticalVideoExporter.SceneInput(scene.imagePathOrUrl, scene.audioPath)
                     }
-                    json.put("scenes", scenesArray)
-
-                    manifestFile.writeText(json.toString(2))
-                    exportedVideoPath = manifestFile.absolutePath
-                    isVideoExported = true
-                    AppCacheManager.checkAndAutoClearCache(context, 100L)
-
-                    PipelineForegroundService.startOrUpdate(
-                        context = context,
-                        title = "🎉 9:16 Video Export Ready!",
-                        text = "Project ${exportId} saved with ${mergedVideoScenes.size} scenes (${AppCacheManager.getFormattedCacheSize(context)} cached)",
-                        progress = 100,
-                        max = 100
-                    )
-                    Toast.makeText(context, "💾 9:16 Shorts Video exported successfully!\nSaved to: ${manifestFile.name}", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Export error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    val result = VerticalVideoExporter.export(context, inputs, outputFile) { status ->
+                        PipelineForegroundService.startOrUpdate(
+                            context = context,
+                            title = "🎬 9:16 Video Export",
+                            text = status,
+                            progress = 95,
+                            max = 100
+                        )
+                    }
+                    result.onSuccess { file ->
+                        exportedVideoPath = file.absolutePath
+                        isVideoExported = true
+                        AppCacheManager.checkAndAutoClearCache(context, 100L)
+                        PipelineForegroundService.startOrUpdate(
+                            context = context,
+                            title = "🎉 9:16 Video Export Ready!",
+                            text = "MP4 saved with ${mergedVideoScenes.size} scenes",
+                            progress = 100,
+                            max = 100
+                        )
+                        Toast.makeText(context, "💾 Real MP4 exported: ${file.name}", Toast.LENGTH_LONG).show()
+                        showYouTubeUploadDialog = file
+                        onPipelineFinished()
+                    }.onFailure { error ->
+                        Toast.makeText(context, "Export error: ${error.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
 
@@ -3308,8 +3260,8 @@ private fun ChatMessageBubble(
                     localFilePath = if (savedPath.isNotBlank()) savedPath else matchedUrl,
                     imageUrl = if (matchedUrl.startsWith("http")) matchedUrl else "file://$savedPath",
                     visualPrompt = prompt,
-                    isSuccess = true,
-                    errorMessage = downloadError
+                    isSuccess = savedPath.isNotBlank(),
+                    errorMessage = downloadError ?: if (savedPath.isBlank()) "Image could not be saved locally" else null
                 )
             }
 
@@ -3379,6 +3331,7 @@ private fun ChatMessageBubble(
 
             val onStartImageGeneration = {
                 if (allVisualPrompts.isNotEmpty() && !isGeneratingImages) {
+                    onPipelineStepChange(4)
                     isGeneratingImages = true
                     totalVisualsCount = allVisualPrompts.size
                     imageGenJob = coroutineScope.launch {
@@ -3420,14 +3373,18 @@ private fun ChatMessageBubble(
                             )
 
                             // If in Auto-Pipeline mode, proceed immediately to Step 4 Video Merge & Auto Play
-                            if (isAutoPipelineActive) {
+                            if (isAutoPipelineActive && results.isNotEmpty() && results.all { it.isSuccess }) {
                                 composeFinalVideo(autoPlay = true)
                                 onAutoPipelineActiveChange(false)
                                 Toast.makeText(context, "🎬 4-Step Auto Pipeline Complete! 9:16 Shorts Video is now ready & playing.", Toast.LENGTH_LONG).show()
+                            } else if (isAutoPipelineActive) {
+                                Toast.makeText(context, "⚠️ Some visuals failed. Retry failed scenes before composing the video.", Toast.LENGTH_LONG).show()
                             }
                         } finally {
                             isGeneratingImages = false
                             imageGenJob = null
+                            onAutoPipelineActiveChange(false)
+                            viewModel.setGeneratingTrendingTopic(false)
                         }
                     }
                 }
@@ -3436,6 +3393,7 @@ private fun ChatMessageBubble(
             // Function to run Step 3 Edge Neural Audio Synthesis & Master Audio Merge
             val onStartAudioSynthesis = {
                 if (allAudioSegments.isNotEmpty() && !isGeneratingAudio) {
+                    onPipelineStepChange(2)
                     isGeneratingAudio = true
                     viewModel.setGeneratingAudio(true)
                     totalAudiosCount = allAudioSegments.size
@@ -5755,9 +5713,14 @@ private fun ChatMessageBubble(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    val targetPath = exportedVideoPath ?: mergedVideoScenes.firstOrNull()?.imagePathOrUrl ?: ""
-                                    val fileToUpload = if (targetPath.startsWith("/")) File(targetPath) else File(context.cacheDir, "youtube_short_${System.currentTimeMillis()}.mp4")
-                                    showYouTubeUploadDialog = fileToUpload
+                                    val fileToUpload = exportedVideoPath
+                                        ?.let(::File)
+                                        ?.takeIf { it.isFile && it.extension.equals("mp4", ignoreCase = true) }
+                                    if (fileToUpload != null) {
+                                        showYouTubeUploadDialog = fileToUpload
+                                    } else {
+                                        Toast.makeText(context, "Real MP4 export is required before YouTube upload.", Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0055), contentColor = Color.White),
@@ -5976,8 +5939,8 @@ fun AutonomousPipelineCard(
             3 -> "3-Second Timeframe Prompts"
             4 -> "Rendering 9:16 HD Visuals"
             5 -> "Calculating speech timing..."
-            6 -> "Composing 9:16 vertical video..."
-            7 -> "Publishing to YouTube Shorts..."
+            6 -> "Building the real local scene preview..."
+            7 -> "Waiting for a real exported MP4..."
             else -> "Autonomous AI Pipeline Active"
         }
     } else {
@@ -6140,8 +6103,8 @@ fun AutonomousPipelineCard(
                         Triple(3, "visuals generate", "3-Second Timeframe Prompts"),
                         Triple(4, "images generate", "Rendering 9:16 HD Visuals"),
                         Triple(5, "captions", "Calculating speech timing..."),
-                        Triple(6, "video generate", "Composing 9:16 vertical video..."),
-                        Triple(7, "uploading youtube", "Waiting for final video render...")
+                        Triple(6, "video preview compose", "Building the real local scene preview..."),
+                        Triple(7, "youtube upload", "Requires a real exported MP4 file...")
                     )
 
                     stepsList.forEach { (num, name, desc) ->

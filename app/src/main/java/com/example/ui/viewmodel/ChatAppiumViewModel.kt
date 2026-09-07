@@ -639,6 +639,9 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
 
                 _isApiCalling.value = false
                 _isGeneratingStep3Visuals.value = false
+                if (isTrendingRequest) {
+                    _isGeneratingTrendingTopic.value = false
+                }
                 
                 val isTrendingJson = rawReply.contains("\"storyboard\"") || rawReply.contains("\"trend_metadata\"") || rawReply.contains("\"visual_cue\"")
                 val isStep3Json = rawReply.contains("\"visual_timeline\"") || rawReply.contains("\"story_analysis\"")
@@ -664,8 +667,17 @@ Ensure the JSON is completely valid, strings are properly escaped, and all field
         // Generate ChatGPT reply (Live API if Key exists, or fallback)
         viewModelScope.launch {
             _isApiCalling.value = true
-            val replyText = fetchRealLiveResponse(prompt)
-            _isApiCalling.value = false
+            val replyText = try {
+                fetchRealLiveResponse(prompt)
+            } finally {
+                _isApiCalling.value = false
+                if (isTrendingRequest) {
+                    _isGeneratingTrendingTopic.value = false
+                }
+                if (isStep3Request) {
+                    _isGeneratingStep3Visuals.value = false
+                }
+            }
             _chatMessages.value = _chatMessages.value + ChatMessage(sender = "ChatGPT", text = replyText)
             logAction(
                 actionName = "receive_response",
