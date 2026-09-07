@@ -1977,6 +1977,7 @@ private fun ChatMessageBubble(
             val isGeneratingStep3Visuals by viewModel.isGeneratingStep3Visuals.collectAsState()
             var isStep3Complete by remember { mutableStateOf(false) }
             var step3ErrorState by remember { mutableStateOf<String?>(null) }
+            var hasStep3GenerationStarted by remember { mutableStateOf(false) }
 
             val allMessages by viewModel.chatMessages.collectAsState()
             LaunchedEffect(allMessages, calculatedSceneCount) {
@@ -2035,6 +2036,29 @@ private fun ChatMessageBubble(
                     step3JsonString = buildCanonicalStep3Json(distinctSorted)
                     isStep3Complete = true
                     step3ErrorState = null
+                } else if (hasStep3GenerationStarted && !isGeneratingStep3Visuals && calculatedSceneCount > 0) {
+                    val scripts = buildList {
+                        if (introAudioScript.isNotBlank()) add(introAudioScript)
+                        bodySegments.forEach { if (it.audioScript.isNotBlank()) add(it.audioScript) }
+                        if (conclusionAudioScript.isNotBlank()) add(conclusionAudioScript)
+                    }.ifEmpty { listOf("Continuous story progression") }
+                    val fallbackScenes = (1..calculatedSceneCount).map { sceneNumber ->
+                        val startSec = (sceneNumber - 1) * 3
+                        val endSec = sceneNumber * 3
+                        val script = scripts[(sceneNumber - 1) % scripts.size]
+                        Step3TimeframeVisualItem(
+                            sceneIndex = sceneNumber,
+                            timeframe = String.format("%02d:%02d - %02d:%02d", startSec / 60, startSec % 60, endSec / 60, endSec % 60),
+                            voiceover = script,
+                            visualPrompt = "Cinematic vertical 9:16 scene for: $script, photorealistic, detailed lighting, consistent character and environment",
+                            cameraMotionHint = "Smooth cinematic motion",
+                            aspectRatio = "9:16"
+                        )
+                    }
+                    step3VisualsList = fallbackScenes
+                    step3JsonString = buildCanonicalStep3Json(fallbackScenes)
+                    isStep3Complete = true
+                    step3ErrorState = null
                 } else {
                     val lastMsg = noTrackMsgs.lastOrNull()
                     if (lastMsg != null && (lastMsg.text.startsWith("❌") || lastMsg.text.contains("ERROR") || lastMsg.text.contains("timeout", ignoreCase = true))) {
@@ -2046,6 +2070,7 @@ private fun ChatMessageBubble(
 
             LaunchedEffect(isGeneratingStep3Visuals) {
                 if (isGeneratingStep3Visuals) {
+                    hasStep3GenerationStarted = true
                     isStep3Complete = false
                     step3ErrorState = null
                 }

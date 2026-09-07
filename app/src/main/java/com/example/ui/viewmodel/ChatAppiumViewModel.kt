@@ -543,13 +543,17 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
         val prompt = _currentPrompt.value.trim()
         if (prompt.isEmpty()) return
 
-        val isTrendingRequest = prompt.lowercase().contains("trending topic") || 
-                                prompt.lowercase().contains("trend_metadata") || 
-                                prompt.lowercase().contains("storyboard") ||
-                                prompt.lowercase().contains("category:")
-
         val isStep3Request = prompt.lowercase().contains("visual_timeline") || 
                              prompt.lowercase().contains("story_analysis")
+
+        // Step 3 prompts also contain the word "storyboard"; classify them first
+        // so they cannot be routed through the Step 1 trending-topic state.
+        val isTrendingRequest = !isStep3Request && (
+            prompt.lowercase().contains("trending topic") ||
+                prompt.lowercase().contains("trend_metadata") ||
+                prompt.lowercase().contains("storyboard") ||
+                prompt.lowercase().contains("category:")
+            )
 
         val displayPrompt = if (isTrendingRequest) {
             "⚡ [REQUESTING TRENDING TOPIC GENERATION VIA NOTRACK AI]"
