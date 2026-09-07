@@ -327,41 +327,35 @@ fun MainChatScreen(
         }
     }
     
-    var activePipelineStep by rememberSaveable { mutableIntStateOf(1) }
-    var pipelineProgressPercent by rememberSaveable { mutableIntStateOf(5) }
+    var activePipelineStep by rememberSaveable { mutableIntStateOf(0) }
+    var pipelineProgressPercent by rememberSaveable { mutableIntStateOf(0) }
     var isPipelineExpanded by rememberSaveable { mutableStateOf(true) }
     var isAutoPipelineActive by rememberSaveable { mutableStateOf(false) }
     var isPipelineRunning by rememberSaveable { mutableStateOf(false) }
 
+    val livePipelineStepState = when {
+        isGeneratingImagesLive -> 4 to 75
+        isGeneratingStep3VisualsLive -> 3 to 55
+        isGeneratingAudioLive -> 2 to 35
+        isGeneratingTrendingTopic || isApiCalling -> 1 to 15
+        else -> 0 to 0
+    }
+
     LaunchedEffect(
         isPipelineRunning,
+        isGeneratingTrendingTopic,
         isApiCalling,
         isGeneratingAudioLive,
         isGeneratingStep3VisualsLive,
         isGeneratingImagesLive
     ) {
         if (!isPipelineRunning) {
-            activePipelineStep = 1
+            activePipelineStep = 0
             pipelineProgressPercent = 0
         } else {
-            when {
-                isGeneratingImagesLive -> {
-                    activePipelineStep = 4
-                    pipelineProgressPercent = 55
-                }
-                isGeneratingStep3VisualsLive -> {
-                    activePipelineStep = 3
-                    pipelineProgressPercent = 40
-                }
-                isGeneratingAudioLive -> {
-                    activePipelineStep = 2
-                    pipelineProgressPercent = 25
-                }
-                isApiCalling -> {
-                    activePipelineStep = 1
-                    pipelineProgressPercent = 10
-                }
-            }
+            val (step, progress) = livePipelineStepState
+            activePipelineStep = step
+            pipelineProgressPercent = progress
         }
     }
 
