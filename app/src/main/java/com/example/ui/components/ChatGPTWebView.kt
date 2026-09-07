@@ -269,7 +269,8 @@ fun ChatGPTWebView(
                             // Fetch from ASSISTANT messages only: .row:not(.usr) inside #flow
                             var assistantRows = document.querySelectorAll('#flow .row:not(.usr), .flow .row:not(.usr), .row.ag-c, .row.ag-a, .row.syn');
                             var latestAssistantRow = null;
-                            if (assistantRows && assistantRows.length > 0) {
+                            // Ignore every bubble that existed before this prompt was submitted.
+                            if (assistantRows && assistantRows.length > prevAssistantCount) {
                                 latestAssistantRow = assistantRows[assistantRows.length - 1];
                             }
                             

@@ -586,12 +586,12 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
         if (_webUrl.value.contains("notrack.ai")) {
             viewModelScope.launch {
                 _isApiCalling.value = true
-                _noTrackPromptEvent.value = prompt
-                
                 val responseDeferred = kotlinx.coroutines.CompletableDeferred<String>()
                 registerNoTrackResponseCallback { response ->
                     responseDeferred.complete(response)
                 }
+                // Install the waiter before publishing the event so a fast WebView response cannot be lost.
+                _noTrackPromptEvent.value = prompt
                 
                 // Wait up to 60 seconds for the JS scraper to finish and return results
                 val rawReply = try {
@@ -603,9 +603,10 @@ class ChatAppiumViewModel(application: Application) : AndroidViewModel(applicati
                 }
 
                 _isApiCalling.value = false
-                _isGeneratingStep3Visuals.value = false
                 if (isTrendingRequest) {
                     _isGeneratingTrendingTopic.value = false
+                } else if (isStep3Request) {
+                    _isGeneratingStep3Visuals.value = false
                 }
                 
                 val isTrendingJson = rawReply.contains("\"storyboard\"") || rawReply.contains("\"trend_metadata\"") || rawReply.contains("\"visual_cue\"")

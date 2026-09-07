@@ -217,6 +217,7 @@ fun MainChatScreen(
     val promptText by viewModel.currentPrompt.collectAsState()
     val isWebViewMode by viewModel.isWebViewMode.collectAsState()
     val webUrl by viewModel.webUrl.collectAsState()
+    val browserSessionIndex by viewModel.browserSessionIndex.collectAsState()
     val isAutomating by viewModel.isAutomating.collectAsState()
     val automationStatus by viewModel.lastAutomationStatus.collectAsState()
     val extractedDomJson by viewModel.extractedDomJson.collectAsState()
@@ -741,7 +742,9 @@ fun MainChatScreen(
                         .size(360.dp, 480.dp)
                         .offset(x = (-3000).dp)
                 ) {
-                    ChatGPTWebView(url = webUrl, viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                    androidx.compose.runtime.key(browserSessionIndex) {
+                        ChatGPTWebView(url = webUrl, viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                    }
                 }
 
                 // Scrollable green terminal chatbot message window
@@ -1982,83 +1985,30 @@ private fun ChatMessageBubble(
             val allMessages by viewModel.chatMessages.collectAsState()
             LaunchedEffect(allMessages, calculatedSceneCount) {
                 val noTrackMsgs = allMessages.filter { it.sender == "NoTrack AI" }
-                val step3Msgs = noTrackMsgs.filter { msg ->
+                val latestStep3Msg = noTrackMsgs.lastOrNull { msg ->
                     msg.text.contains("visual_timeline") && msg.text.contains("{")
                 }
                 
                 val mergedList = mutableListOf<Step3TimeframeVisualItem>()
-
-                for (msg in step3Msgs) {
-                    val parsed = parseStep3VisualsJson(msg.text)
-                    if (parsed.isNotEmpty()) {
-                        mergedList.addAll(parsed)
-                    }
+                latestStep3Msg?.let { msg ->
+                    mergedList.addAll(parseStep3VisualsJson(msg.text))
                 }
 
                 if (mergedList.isNotEmpty()) {
                     val distinctSorted = mergedList.distinctBy { it.sceneIndex }.sortedBy { it.sceneIndex }.toMutableList()
-                    
-                    // If AI generated fewer scenes than the exact calculated 3-second scene requirement (e.g. 10 instead of 18)
-                    // Automatically expand and interpolate scenes so EVERY 3-second slice of audio has a dedicated visual prompt!
-                    val targetScenes = maxOf(calculatedSceneCount, distinctSorted.size)
-                    if (distinctSorted.size < targetScenes) {
-                        val baseVisualPrompts = distinctSorted.map { it.visualPrompt }
-                        val baseVoiceovers = distinctSorted.map { it.voiceover }
-                        for (i in distinctSorted.size until targetScenes) {
-                            val startSec = i * 3
-                            val endSec = (i + 1) * 3
-                            val timeStr = String.format("%02d:%02d - %02d:%02d", startSec / 60, startSec % 60, endSec / 60, endSec % 60)
-                            val vo = if (baseVoiceovers.isNotEmpty()) baseVoiceovers[i % baseVoiceovers.size] else "Storyline scene continuous action"
-                            val visPrompt = if (baseVisualPrompts.isNotEmpty()) {
-                                "${baseVisualPrompts[i % baseVisualPrompts.size]}, cinematic variation angle frame ${i + 1} of $targetScenes, 9:16 vertical shorts composition, 8k resolution"
-                            } else {
-                                "Cinematic scene ${i + 1}, dramatic 9:16 vertical shorts visual, photorealistic 8k lighting"
-                            }
-                            distinctSorted.add(
-                                Step3TimeframeVisualItem(
-                                    sceneIndex = i + 1,
-                                    timeframe = timeStr,
-                                    voiceover = vo,
-                                    visualPrompt = visPrompt,
-                                    cameraMotionHint = when (i % 4) {
-                                        0 -> "Slow push in towards focal point"
-                                        1 -> "Smooth dynamic horizontal pan"
-                                        2 -> "Static shot highlighting dramatic lighting"
-                                        else -> "Cinematic tilt upwards"
-                                    },
-                                    aspectRatio = "9:16"
-                                )
-                            )
-                        }
+                    val expectedIndices = (1..calculatedSceneCount).toList()
+                    if (distinctSorted.size == calculatedSceneCount && distinctSorted.map { it.sceneIndex } == expectedIndices) {
+                        step3VisualsList = distinctSorted
+                        step3JsonString = buildCanonicalStep3Json(distinctSorted)
+                        isStep3Complete = true
+                        step3ErrorState = null
+                    } else if (!isGeneratingStep3Visuals) {
+                        step3ErrorState = "Strict Step 3 JSON rejected: expected exactly $calculatedSceneCount contiguous 3-second scenes, received ${distinctSorted.size}."
+                        isStep3Complete = false
                     }
-
-                    step3VisualsList = distinctSorted
-                    step3JsonString = buildCanonicalStep3Json(distinctSorted)
-                    isStep3Complete = true
-                    step3ErrorState = null
                 } else if (hasStep3GenerationStarted && !isGeneratingStep3Visuals && calculatedSceneCount > 0) {
-                    val scripts = buildList {
-                        if (introAudioScript.isNotBlank()) add(introAudioScript)
-                        bodySegments.forEach { if (it.audioScript.isNotBlank()) add(it.audioScript) }
-                        if (conclusionAudioScript.isNotBlank()) add(conclusionAudioScript)
-                    }.ifEmpty { listOf("Continuous story progression") }
-                    val fallbackScenes = (1..calculatedSceneCount).map { sceneNumber ->
-                        val startSec = (sceneNumber - 1) * 3
-                        val endSec = sceneNumber * 3
-                        val script = scripts[(sceneNumber - 1) % scripts.size]
-                        Step3TimeframeVisualItem(
-                            sceneIndex = sceneNumber,
-                            timeframe = String.format("%02d:%02d - %02d:%02d", startSec / 60, startSec % 60, endSec / 60, endSec % 60),
-                            voiceover = script,
-                            visualPrompt = "Cinematic vertical 9:16 scene for: $script, photorealistic, detailed lighting, consistent character and environment",
-                            cameraMotionHint = "Smooth cinematic motion",
-                            aspectRatio = "9:16"
-                        )
-                    }
-                    step3VisualsList = fallbackScenes
-                    step3JsonString = buildCanonicalStep3Json(fallbackScenes)
-                    isStep3Complete = true
-                    step3ErrorState = null
+                    step3ErrorState = "Strict Step 3 JSON rejected: no complete visual_timeline was returned."
+                    isStep3Complete = false
                 } else {
                     val lastMsg = noTrackMsgs.lastOrNull()
                     if (lastMsg != null && (lastMsg.text.startsWith("❌") || lastMsg.text.contains("ERROR") || lastMsg.text.contains("timeout", ignoreCase = true))) {
@@ -2440,7 +2390,11 @@ private fun ChatMessageBubble(
                         indeterminate = true
                     )
 
-                    viewModel.triggerStep3VisualsGenerator(masterPromptStr)
+                    viewModel.openNewBrowserSession("Step 3 complete storyboard in a new browser tab")
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(700)
+                        viewModel.triggerStep3VisualsGenerator(masterPromptStr)
+                    }
                 }
             }
 
@@ -3549,10 +3503,7 @@ private fun ChatMessageBubble(
                             }
                         }
 
-                        // Automatically start Step 3 (NoTrack Timeframe Visuals JSON - Phase 1) as soon as Step 2 voiceover audio and length are calculated
-                        if (isAutoPipelineActive) {
-                            onGenerateStep3VisualsPhase1()
-                        }
+                        // Step 3 starts from the measured master duration observer below as one complete request.
                         } finally {
                             isGeneratingAudio = false
                             viewModel.setGeneratingAudio(false)
